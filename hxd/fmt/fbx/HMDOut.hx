@@ -3,6 +3,11 @@ using hxd.fmt.fbx.Data;
 import hxd.fmt.fbx.BaseLibrary;
 import hxd.fmt.hmd.Data;
 import hxd.BufferFormat;
+import haxe.io.Path;
+#if (sys || nodejs)
+import sys.FileSystem;
+import sys.io.File;
+#end
 
 typedef CollideParams = {
 	?useDefault : Bool,
@@ -47,6 +52,9 @@ class HMDOut extends BaseLibrary {
 	public var collisionUseLowLod : Bool;
 	public var lowPrecConfig : Map<String,Precision>;
 	public var lodsDecimation : Array<Float>;
+	#if (sys || nodejs)
+	var embeddedTexWritten : Map<String, Bool>;
+	#end
 
 	function int32tof( v : Int ) : Float {
 		tmp.set(0, v & 0xFF);
@@ -1487,6 +1495,12 @@ class HMDOut extends BaseLibrary {
 		if( tex == null )
 			return null;
 		var path = tex.get("FileName").props[0].toString();
+		var rel = tex.get("RelativeFilename", true);
+		if( rel != null ) {
+			var relPath = rel.props[0].toString();
+			if( relPath != "" && (path == "" || (Path.isAbsolute(path) && !Path.isAbsolute(relPath))) )
+				path = relPath;
+		}
 		if( path == "" )
 			return null;
 		path = path.split("\\").join("/");
@@ -1502,8 +1516,78 @@ class HMDOut extends BaseLibrary {
 				}
 			}
 		}
+		#if (sys || nodejs)
+		ensureEmbeddedTexture(tex, path);
+		#end
 		return path;
 	}
+
+	#if (sys || nodejs)
+	function ensureEmbeddedTexture( tex : FbxNode, path : String ) {
+		if( path == null || path == "" )
+			return;
+		if( embeddedTexWritten == null )
+			embeddedTexWritten = new Map();
+		if( embeddedTexWritten.exists(path) )
+			return;
+
+		var writePath = path;
+		if( !Path.isAbsolute(writePath) ) {
+			var baseDir = Path.directory(fileName);
+			if( baseDir != null && baseDir != "" )
+				writePath = Path.normalize(baseDir + "/" + writePath);
+		}
+		if( FileSystem.exists(writePath) ) {
+			embeddedTexWritten.set(path, true);
+			return;
+		}
+
+		var video = findVideoForTexture(tex);
+		if( video == null )
+			return;
+		var content = video.get("Content", true);
+		if( content == null || content.props.length == 0 )
+			return;
+		var data = content.props[0].toBinary();
+		if( data == null || data.length == 0 )
+			return;
+
+		var dir = Path.directory(writePath);
+		if( dir != null && dir != "" )
+			ensureDir(dir);
+		File.saveBytes(writePath, data);
+		embeddedTexWritten.set(path, true);
+	}
+
+	function findVideoForTexture( tex : FbxNode ) : FbxNode {
+		var vids = getChilds(tex, "Video");
+		if( vids.length > 0 )
+			return vids[0];
+
+		var media = tex.get("Media", true);
+		if( media != null && media.props.length > 0 ) {
+			var name = media.props[0].toString();
+			for( v in root.getAll("Objects.Video") )
+				if( v.hasProp(PString(name)) )
+					return v;
+			var shortName = name.split("::").pop();
+			for( v in root.getAll("Objects.Video") )
+				if( v.getName() == shortName )
+					return v;
+		}
+		return null;
+	}
+
+	function ensureDir( dir : String ) {
+		if( dir == null || dir == "" || FileSystem.exists(dir) )
+			return;
+		var parent = Path.directory(dir);
+		if( parent != null && parent != dir )
+			ensureDir(parent);
+		if( !FileSystem.exists(dir) )
+			FileSystem.createDirectory(dir);
+	}
+	#end
 
 	function makeSkin( skin : h3d.anim.Skin, obj : TmpObject ) {
 		var s = new Skin();
