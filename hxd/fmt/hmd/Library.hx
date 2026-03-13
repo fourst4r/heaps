@@ -334,6 +334,15 @@ class Library {
 			props = mat.getDefaultModelProps();
 		}
 		#end
+		if( m.props != null ) {
+			for( prop in m.props ) {
+				switch( prop ) {
+				case MaterialDiffuseColor(r, g, b):
+					mat.color.set(r, g, b);
+				default:
+				}
+			}
+		}
 		if( m.diffuseTexture != null ) {
 			mat.texture = loadTexture(m.diffuseTexture);
 			if( mat.texture == null ) mat.texture = h3d.mat.Texture.fromColor(0xFF00FF);

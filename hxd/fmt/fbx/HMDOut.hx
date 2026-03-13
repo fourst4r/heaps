@@ -1251,17 +1251,24 @@ class HMDOut extends BaseLibrary {
 
 				mat.name = m.getName();
 				mat.blendMode = null;
+				var diffuseColor = new h3d.Vector(1, 1, 1);
 
 				// if there's a slight amount of opacity on the material
 				// it's usually meant to perform additive blending on 3DSMax
 				for( p in m.getAll("Properties70.P") ) {
 					var pval = p.props[4];
 					switch( p.props[0].toString() ) {
+					case "DiffuseColor":
+						diffuseColor.set(p.props[4].toFloat(), p.props[5].toFloat(), p.props[6].toFloat());
 					case "Opacity":
 						var v = pval.toFloat();
 						if( v < 1 && v > 0.98 && mat.blendMode == null ) mat.blendMode = Add;
 					default:
 					}
+				}
+				if( diffuseColor.x != 1 || diffuseColor.y != 1 || diffuseColor.z != 1 ) {
+					if( mat.props == null ) mat.props = [];
+					mat.props.push(MaterialDiffuseColor(diffuseColor.x, diffuseColor.y, diffuseColor.z));
 				}
 
 				// get texture
