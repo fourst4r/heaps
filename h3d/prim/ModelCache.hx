@@ -9,11 +9,13 @@ class ModelCache {
 	var models : Map<String, { lib : hxd.fmt.hmd.Library, props : HideProps, col : Array<h3d.col.TransformCollider>, lastTime : Float }>;
 	var textures : Map<String, h3d.mat.Texture>;
 	var anims : Map<String, h3d.anim.Animation>;
+	var missingTextures : Map<String, Bool>;
 
 	public function new() {
 		models = new Map();
 		textures = new Map();
 		anims = new Map();
+		missingTextures = new Map();
 	}
 
 	public function dispose() {
@@ -24,6 +26,7 @@ class ModelCache {
 		anims = new Map();
 		models = new Map();
 		textures = new Map();
+		missingTextures = new Map();
 	}
 
 	public function loadLibrary(res) : hxd.fmt.hmd.Library {
@@ -114,8 +117,13 @@ class ModelCache {
 				path = path.substr(0, -name.length) + name;
 				tres = hxd.res.Loader.currentInstance.load(path);
 			} catch( e : hxd.res.NotFound ) {
-				// force good path error
-				throw error + (model != null ? " fullpath : " + fullPath : "");
+				if( !missingTextures.exists(fullPath) ) {
+					missingTextures.set(fullPath, true);
+					warnMissingTexture(texturePath, fullPath, model != null);
+				}
+				t = h3d.mat.Texture.fromColor(0xFF00FF);
+				textures.set(fullPath, t);
+				return t;
 			}
 		}
 		var img = tres.toImage();
@@ -123,6 +131,15 @@ class ModelCache {
 		t = img.toTexture();
 		textures.set(fullPath, t);
 		return t;
+	}
+
+	function warnMissingTexture( texturePath : String, fullPath : String, hasModel : Bool ) {
+		var msg = 'Warning: Missing texture "${texturePath}"' + (hasModel ? ' fullpath : ' + fullPath : '') + '; using placeholder texture.';
+		#if (sys || nodejs)
+		Sys.println(msg);
+		#else
+		trace(msg);
+		#end
 	}
 
 	public function loadAnimation( anim : hxd.res.Model, ?name : String, ?forModel : hxd.res.Model ) : h3d.anim.Animation {
